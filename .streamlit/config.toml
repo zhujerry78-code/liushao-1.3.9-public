@@ -1,0 +1,19 @@
+[theme]
+base = "light"
+primaryColor = "#5E6AD2"
+font = "sans serif"
+
+# Import the font already shipped with the pinned Streamlit version. Its
+# imported theme also applies to clients with an older cached preset.
+[[theme.fontFaces]]
+family = "Source Sans"
+url = "/static/media/SourceSansVF-Upright.ttf.BsWL4Kly.woff2"
+weight = "200 900"
+
+[server]
+enableStaticServing = true
+address = "127.0.0.1"
+maxUploadSize = 50
+
+[browser]
+gatherUsageStats = false

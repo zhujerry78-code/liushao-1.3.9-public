@@ -1,0 +1,100 @@
+{
+  "task": "T09 按专家的漂移折扣：漂移模型并入引擎、折扣的固定设定、开发集上唯一的一项选择（折扣系数 λ）及其规则（运行前写定并提交）",
+  "written_utc": "2026-11-13",
+  "benchmark_protocol_sha256": "8f85d5088d71b371e7f4e37cf7effd61a0f2094a37faf38628a0237093ac37ab",
+  "upstream_rules_sha256": {
+    "t06_selection_rules.json": "cc6d7a0b0907c242647519398046a863aa48ed4ca62ead8a9629d478c9bff023",
+    "t07b_rules.json": "81120395ca10f451890b48cefb67ed62ecb22ebbf3da065165b8dcafa757a88f",
+    "t08_drift_rules.json": "311c0fa0a351fef3e425adc1ed83469830f6f556c230a79b246dfdfbd887c1b9"
+  },
+  "basis": [
+    "流哨_1.3.8_交接文件.md §4.1 第 2–3 步、§6 T09（验收与止损）、§7 砍除顺序（T09 退回整批统一折扣），§10 A5、A9、A10、A15、A17",
+    "configs/benchmark_protocol.json v4：calibration_data（漂移零分布只用验证 A 半区；推理时可用当前批次的无标签特征做批次漂移检测；批次级统计量在 raw 口径的整批上计算一次）、selection_rules.covers（漂移折扣 λ）、uncertainty、ablations 第三条「去掉漂移折扣」",
+    "T07b 采用的引擎 engine2-a9812f5621a2（configs/t07b_rules.json），T08 选中的漂移统计量 tail_h_adj（liushao_engine.drift.SELECTED）"
+  ],
+  "prior_knowledge_when_written": {
+    "statement": "写本文件时，下面这些开发集数字已经看过。任何折扣后的融合、共形、队列或放行错误都没有在任何数据上算过。",
+    "seen": [
+      "T08（tail_h_adj，批大小档 1000 的阈值：整批 0.0930，RF 0.0930，LR 0.0370，典型性 0.0722）：bot_holdout δ 0.0242（RF 0.0182 / LR 0.0079 / 典型性 0.0242），不报；演示数据 δ 0.0348，不报；02-15 δ 0.0995（RF 0.0995 / LR 0.0913 / 典型性 0.0182），报漂移（擦线，主要来自正常流量的跨日差异）；02-21 δ 0.2916（RF 0.2916 / LR 0.0851 / 典型性 0.2213），报漂移",
+      "T07b 选中引擎（dedup，等队列 k = 对照组 1 的原生队列）：02-15 k = 8,293 时放行错误 654（对照组 1 为 319），原生队列 9,732、原生放行 573；02-21 k = 51,670 时放行错误 1（对照组 1 为 5），原生队列 32,998、原生放行 4；bot_holdout 判定错误 40、原生队列 463、原生放行 19、正常类覆盖率 0.965、攻击类 0.9985；两日平均指标 M = 0.00386",
+      "T07b 分标签（dedup）：02-21 正常流量 95.1% 被监督检验拒绝、95.2% 为空集、平均 K 0.717；02-15 正常 5.9% 被监督检验拒绝、2.4% 被典型性检验拒绝；GoldenEye 96.7% 被监督检验拒绝；Slowloris 70.3% 被典型性检验拒绝，放行 279；HOIC 被直接判攻击 99.8%；LOIC-UDP（155 条）全部空集",
+      "T07b 引擎的可靠度 RF 0.99、LR 0.9876、典型性 0.95；冲突阈值（验证 A 半区 K 的 0.99 分位）0.7797；K ≥ 冲突阈值而集合为单标签的记录，在三个开发集的各标签中占比都不超过 0.15%"
+    ],
+    "expectation": "预期：bot_holdout 与演示数据不报漂移，结果与 T07b 逐条相同；02-21 上 RF 一路被大幅折扣，原生队列可能缩小，但等队列（k = 51,670）下放行错误已只有 1 条，改进空间很小；02-15 的 δ 只是擦线，等队列放行错误的变化可能落在区间内。因此 T09 很可能达不到「等队列放行错误下降」这一验收项。这些预期不参与任何规则。"
+  },
+  "data_scope": {
+    "fit": {
+      "train": "典型性参考集（不变）",
+      "validation_half_a": "RF、LR 校准器、可靠度、典型性质量映射零分布、冲突阈值（均不变）；新增：漂移模型的参考集与零分布（三路专家分数 z = (RF, LR, 典型性)，按验证划分的时间块 block_id 做逐块对其余块的零分布，与 T08 相同）",
+      "validation_half_b": "B1 Venn–Abers、B2 共形（不变）；B3 留给 T12，本任务不读 B3 的分数"
+    },
+    "evaluation_sets": ["bot_holdout", "02-15", "02-21"],
+    "views": "raw 与 dedup 都报告，主口径 dedup",
+    "labels_used": "开发集标签只用于计算指标和本文件 selection 中的选择，不进入任何拟合、校准或漂移检测",
+    "final_test_days": "不读取，不运行（scripts.benchmark.run.select_sets 拒绝；本任务的脚本只经由 select_sets 取数据集）",
+    "smoke": "冒烟运行只读 bot_holdout，不读 02-15、02-21，自助次数减少，输出放项目外的临时目录；只用来检查程序，不据此改本文件"
+  },
+  "fixed_design": {
+    "note": "本节各项在看任何 T09 结果之前定下，不在开发集上选择，运行后不改。交接文件没有规定的地方标注「补充设定」。",
+    "drift_model_in_engine": "fit_engine 在验证 A 半区上调用 liushao_engine.drift.fit_drift：z 用拟合时固定累加顺序的 RF 分数（liushao_engine.rf_scores）、LR 分数和引擎的典型性分数；统计量 tail_h_adj（T08 选中）；批大小档 200 / 500 / 1000、零分布 200 次、95% 分位、种子 138，全部沿用 T08。程序核对：引擎内各档阈值与 T08 结果（t08_drift_20261111）的 tail_h_adj 阈值之差不超过 1e-9；开发日的 δ 与 T08 入档值之差不超过 1e-6，否则停下报告",
+    "batch_drift": "每批（上传的一个文件；基准中为协议 batch_definition 的整批 raw 记录）调用一次 detect_drift，得到 δ、δ_RF、δ_LR、δ_典型性与是否报漂移。少于 200 条时不检测（drift_flag 为 False，δ 为空），也不折扣",
+    "discount_gate": "补充设定。只在整批报漂移（drift_flag 为真）时折扣；不报漂移的批次，引擎输出与不折扣时逐条相同。理由：tail_h_adj 是绝对值统计量，同分布批次也总是大于 0，对未超过零分布 95% 分位的波动不应收回信任；这也使交接 T09 验收中「同分布结果变化在块自助区间内」一项在不报漂移的批次上自动成立",
+    "discount_form": {
+      "per_expert": "r'_s = r_s · clip(1 − λ · δ_s, 0, 1)，s ∈ {RF, LR, 典型性}；折扣掉的质量流向 Θ（交接 §4.1 第 3 步）",
+      "uniform": "止损形式（交接 §7「T09 退回整批统一折扣」）：三路都用整批 δ，r'_s = r_s · clip(1 − λ · δ, 0, 1)"
+    },
+    "recalibration": "补充设定。折扣之后，所有用到融合输出的校准量在同一组折扣后的可靠度下重算：B2 的共形校准分数（攻击类 1 − BetP(A)、正常类监督检验 BetP(A)、典型性检验 Bel(U)/(Bel(U)+Bel(N))），B1 的 Venn–Abers（网格版与精确表），验证 A 半区 K 的 0.99 分位冲突阈值。为此引擎保存验证 A、B1、B2 三份记录的三路原始专家分数与标签。理由：共形 p 值要求校准分数与测试分数出自同一个非一致性函数；只折扣测试批次而沿用未折扣的校准分数，会在同分布数据上破坏覆盖率。校准器（保序映射）与典型性质量映射不随折扣变化",
+    "unchanged": "证据框架、焦元、未折扣的可靠度、典型性信号、两条正常类检验与 Bonferroni 合并、ε = 0.05、复核队列定义（共形非单标签，或 K ≥ 冲突阈值）、临时判定、优先级，全部照 configs/t07_rules.json 与 configs/t07b_rules.json",
+    "outputs": "按接口约定 contract-1 第 3 节追加批次级列 drift_flag、drift_delta、drift_delta_rf、drift_delta_lr、drift_delta_typ（每行重复）。少于 200 条的批次 drift_flag 为 False、四个 δ 为空；接口约定随之补充这一取值说明",
+    "engine_without_drift_model": "不给验证集时间块时，fit_engine 的结果与 T07b 引擎逐参数相同（程序核对：引擎版本号等于 engine2-a9812f5621a2）"
+  },
+  "selection": {
+    "parameter": "折扣系数 λ（以及止损时的折扣形式）",
+    "reference": "λ = 0：不折扣，即带漂移列的 T07b 引擎，判定、队列、优先级与 T07b 逐条相同（程序核对）",
+    "candidates": {
+      "per_expert": [0.5, 1, 2, 4],
+      "uniform": [0.5, 1, 2, 4]
+    },
+    "metric": {
+      "name": "M = 02-15 与 02-21 两个开发日的未复核放行错误率的平均（dedup 口径，协议 primary_budget：k = 对照组 1 在同一数据集、同一口径下的原生队列规模），与 T07、T07b 的选择指标相同",
+      "direction": "越低越好",
+      "bootstrap": "协议的块自助（2,000 次，seed 20261110，按文件分层）；两日平均按重采样序号逐一配对；候选与参考之间的差值用同一组重采样块计算"
+    },
+    "eligibility": "bot_holdout（dedup 口径）上，候选与参考的未复核放行错误率（primary_budget）之差的配对 95% 区间下界 ≤ 0（同分布结果没有明确变差）。bot_holdout 不报漂移时，候选与参考逐条相同，自动合格",
+    "rule": [
+      "第一步（按专家折扣）：在合格的 per_expert 候选中，取 (M_候选 − M_参考) 的配对 95% 区间整体小于 0 者；不止一个时取 M 点估计最低者，再相同取较小的 λ",
+      "第二步（止损，交接 §7）：第一步没有选中时，对 uniform 候选用同样的条件和取法",
+      "第三步：两步都没有选中时，取参考（λ = 0，不折扣）。漂移检测仍并入引擎并输出批次级列；协议消融项「去掉漂移折扣」在 T16 中与主配置相同，照实标注"
+    ],
+    "simplicity": "差距落在块自助区间内时不折扣（协议 uncertainty.simplicity_rule）",
+    "caveat": "02-21 只有 13 个时间块，区间参考性低；两个开发日在 T06、T07、T07b、T08 中已经用于选择"
+  },
+  "reported_not_selected": {
+    "note": "以下各项在同一次运行中算出并入表，只作说明，不参与 selection",
+    "all_candidates": "全部 8 个候选与参考在三个开发集上的完整指标",
+    "native_queue": "原生队列规模与原生放行错误、各类覆盖率、两条正常类检验的拒绝比例、共形空集比例（按标签）",
+    "discounted_parameters": "每个开发日、每个候选折扣后的可靠度、冲突阈值，以及折扣前后的 δ",
+    "control_groups": "对照组 1–3 在同一份抽样上重算，并与修正后的基线（dev_baseline_v3_dedupfix_77cd099_20261112）逐项核对"
+  },
+  "acceptance_report": {
+    "items": [
+      "交接 T09：相对不折扣的 T07b，等队列（dedup，primary_budget）下放行错误下降：02-15（k = 8,293，T07b 654）、02-21（k = 51,670，T07b 1），并给配对区间",
+      "交接 T09：同分布结果（bot_holdout、演示数据）变化在块自助区间内；同时报告两者是否报漂移",
+      "与对照组 1、2、3 的配对差值与区间；原生队列与原生放行错误成对报告"
+    ],
+    "rule": "按交接 §10 A15：各项全部达标且没有需要说明的问题时可记通过；否则照实列出不达标项，不记通过"
+  },
+  "engine_adoption": "按 selection 的结果用 scripts/fit_engine.py 重拟合 artifacts/engine.joblib，并用 --expect-version 核对它与本次运行评估的引擎版本号相同；engine.json 记录协议 v4 的 SHA 与本文件 SHA",
+  "no_retuning": "看到开发集结果后，不修改 fixed_design、候选、指标、合格条件或选择规则。发现程序错误时，修复并在记录中写明错误内容和修复前后的差别。",
+  "known_limits_to_report": [
+    "折扣强度 δ 由当前批次本身算出，校准分数随之重算；对单条测试记录而言，非一致性函数依赖于它所在的批次，严格的有限样本可交换性只是近似成立（批次越大，单条记录的影响越小）",
+    "02-15 的漂移是擦线报出（0.0995 对 0.0930），主要来自正常流量的跨日差异",
+    "02-21 只有 13 个时间块；LOIC-UDP 只有 155 条"
+  ],
+  "references": [
+    "Shafer G. A Mathematical Theory of Evidence. Princeton University Press, 1976.（可靠度折扣）",
+    "Mercier D., Quost B., Denœux T. Refined modeling of sensor reliability in the belief function framework using contextual discounting. Information Fusion, 2008.",
+    "Rabanser S., Günnemann S., Lipton Z. Failing Loudly: An Empirical Study of Methods for Detecting Dataset Shift. NeurIPS 2019.",
+    "Vovk V., Gammerman A., Shafer G. Algorithmic Learning in a Random World. Springer, 2005."
+  ]
+}

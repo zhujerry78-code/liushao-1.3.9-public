@@ -1,0 +1,71 @@
+{
+  "task": "T11 四态输出：判定规则、队列与优先级的固定设定（运行前写定并提交；本任务不在开发集上做任何选择）",
+  "written_utc": "2026-11-13",
+  "benchmark_protocol_sha256": "8f85d5088d71b371e7f4e37cf7effd61a0f2094a37faf38628a0237093ac37ab",
+  "upstream_rules_sha256": {
+    "t07_rules.json": "d1da22eefc06ebbda52276516eb3b84cadb991f824709afb5e2c8458e35d7a81",
+    "t07b_rules.json": "81120395ca10f451890b48cefb67ed62ecb22ebbf3da065165b8dcafa757a88f",
+    "t12a_rules.json": "c877ce2ff9e828fc4e52c44bf6841c675b0203172a9e56764697d7ba80fa6fba",
+    "t10_rules.json": "032c7801051ff8b56dce8748bab9d71c23a75214705902bb6c72600f350f4b8f"
+  },
+  "basis": [
+    "流哨_1.3.8_交接文件.md §4.3 四态判定、§6 T11（验收：演示数据上全部共形空集记录显示为新异；各态计数之和等于总数；无止损，必须完成）、§10 A8、A15",
+    "docs/usage/ENGINE_OUTPUT_CONTRACT.md contract-4 §2.3：ow_state、ow_queue、ow_normal_reject、engine_rank、cp_p_normal_supervised、cp_p_normal_typicality",
+    "T10 选中的引擎 engine2-1dc1f330d08c（不折扣、q95 冲突门控、报漂移批次上加权共形截断 10）"
+  ],
+  "prior_knowledge_when_written": {
+    "statement": "写本文件时下面这些数字已经看过。四态在任何数据上都没有算过。",
+    "seen": [
+      "T10 选中引擎（dedup）：02-15 等队列（k = 8,293）放行 592，原生队列 12,933、原生放行 56；02-21（k = 51,670）放行 2，原生队列 68,758；bot_holdout 放行 23，原生队列 523、原生放行 0、判定错误 40；对照组 1 分别为 319、5、5",
+      "T10 预测集构成（dedup，加权后）：02-15 正常 空集 0.021 / 只含正常 0.898 / 只含攻击 0.023；GoldenEye 0.0003 / 0.0005 / 0.747；Slowloris 0.000 / 0.003 / 0.706；02-21 正常 0.001 / 0.054 / 0；HOIC 0 / 0.0001 / 0；LOIC-UDP 0.987 / 0.006 / 0",
+      "T07b 各标签平均 Bel(U)（未加权引擎，Bel 不受加权影响）：02-15 正常 0.021、GoldenEye 0.027、Slowloris 0.572；02-21 正常 0.002、HOIC 0、LOIC-UDP 0.933；bot_holdout 正常 0.015、Bot 0",
+      "T12a：q95 门控在 02-21 上覆盖 HOIC 全部 34,370 条、正常 99.4%；02-15 上 GoldenEye 3,826 条、Slowloris 509 条、正常 5,007 条",
+      "演示数据（T10 引擎，不报漂移、不加权）：复核队列 31 条；T07b 引擎上集合大小为 0 的 28 条"
+    ],
+    "expectation": "预期：02-15 上加权后被判为「只含攻击」的 Slowloris，因为 Bel(U) 占优而回到新异态；02-21 的正常流量和 HOIC 大多是双标签或门控，归入模糊态。这些预期不参与规则。"
+  },
+  "data_scope": {
+    "fit": "不拟合任何东西；四态只由引擎已有的输出决定",
+    "evaluation_sets": ["bot_holdout", "02-15", "02-21"],
+    "views": "raw 与 dedup 都报告，主口径 dedup",
+    "final_test_days": "不读取，不运行（只经由 scripts.benchmark.run.select_sets 取数据集）",
+    "smoke": "冒烟运行只读 bot_holdout，不读 02-15、02-21"
+  },
+  "fixed_design": {
+    "note": "交接 §4.3 的四态。交接写的「Bel(U) 超过阈值」改为「Bel(U) 占优」（补充设定），这样不引入需要在开发集上选择的阈值；「Bel(·) 占优」= 该单元素集合的 Bel 是 Bel(A)、Bel(N)、Bel(U) 中最大者，相等时不算占优。四态以引擎实际输出的共形集合为准（报漂移的批次上即加权共形的集合）",
+    "state_rule_in_order": [
+      "1. 共形空集 → 新异（交接：共形空集 → 新异）",
+      "2. 共形双标签 → 模糊（交接：共形双标签 → 模糊）",
+      "3. 冲突门控为真（ow_conflict_gate，T12a 选中的 q95）→ 模糊（交接：K 超过阈值 → 模糊）",
+      "4. 单标签为正常且 Bel(N) 占优 → 正常；单标签为攻击且 Bel(A) 占优 → 攻击（交接：单标签且对应 Bel 占优）",
+      "5. 单标签但 Bel(U) 占优 → 新异（交接：Bel(U) 超过阈值 → 新异）",
+      "6. 其余（单标签，但占优的是另一个已知类，或没有严格占优者）→ 模糊（共形与证据不一致，交给人）"
+    ],
+    "normal_reject": "ow_normal_reject：正常类监督检验 p 值 ≤ ε/2 记 supervised，典型性检验 p 值 ≤ ε/2 记 typicality，两者都是记 both，都不是为空。p 值取引擎实际使用的（报漂移的批次上为加权 p 值）",
+    "queue": "ow_queue = 新异态 → 「新异」，模糊态 → 「模糊」，其余为空（「风险控制」留给 T12）。engine_review = ow_queue 非空。注意：第 5、6 条会把一部分共形单标签、未被门控的记录送进队列，因此队列定义比 T10 引擎（集合非单标签 ∪ 门控）多出这两类",
+    "provisional_decision": "不变：共形单标签时采用，否则 BetP(A) ≥ 0.5",
+    "priority": "engine_rank：与 T07 起的优先级相同，即队列内在前、其余在后；两段内按临时判定的风险降序（判正常时风险 = 1 − BetP(N)，判攻击时 = BetP(N)），再按 K 降序、原始顺序。1 为最先复核。程序核对：engine_rank 给出的顺序与基准脚本按同一定义算出的顺序逐条相同",
+    "outputs": "按接口约定追加逐条列 ow_state、ow_queue、ow_normal_reject、engine_rank、cp_p_normal_supervised、cp_p_normal_typicality；只有带 states 参数的引擎（T11 起）输出。列名、取值不改约定"
+  },
+  "selection": "无。本任务不在开发集上选择任何参数；开发集结果只报告",
+  "reported": {
+    "states": "三个开发集与演示数据上，各标签的四态计数与比例（raw、dedup）；ow_normal_reject 的分布",
+    "queue": "原生队列（模糊、新异两队列各自规模）与原生放行错误；等队列放行错误（primary_budget 与固定预算占比）及与 T10 引擎、对照组 1 的配对差",
+    "novelty": "新异检出率（各未见攻击标签中被判为新异的比例）与正常流量被判新异的比例成对报告（协议 metrics）",
+    "control_groups": "对照组 1–3 在同一份抽样上重算，并与修正后的基线逐项核对"
+  },
+  "acceptance_report": {
+    "items": [
+      "交接 T11 / A8：演示数据上全部共形空集记录显示为新异（条数以本次引擎为准）",
+      "交接 T11：各数据集上四态计数之和等于总记录数，每条记录恰好一个状态"
+    ],
+    "rule": "两项都满足且没有需要说明的问题时，可按交接 §10 A15 记通过；队列变化等结果照实列出"
+  },
+  "engine_adoption": "引擎参数加 states = 'handoff-4.3-v1'，用 scripts/fit_engine.py 重拟合 artifacts/engine.joblib，并以 --expect-version 核对与本次运行评估的引擎版本号相同",
+  "no_retuning": "看到开发集结果后，不修改四态规则、队列或优先级。程序错误修复后在记录中写明前后差别。",
+  "known_limits_to_report": [
+    "「新异」是未见模式，包含良性的新业务；新异检出率必须与正常流量的新异比例成对报告",
+    "模仿正常流量的未见攻击求交后落在 {N}，会被判为正常",
+    "02-21 只有 13 个时间块；LOIC-UDP 只有 155 条"
+  ]
+}

@@ -1,0 +1,13 @@
+# Windows offline install assets (packaged separately at release, T20)
+/wheels/
+/runtime/
+# Local environments, caches and state
+__pycache__/
+*.pyc
+.pytest_cache/
+.pytest-search-*/
+.venv*/
+/data/
+*.sqlite
+demo-state/
+logs/

@@ -1,0 +1,25 @@
+{
+  "task": "T10 v2：B2 筛查回退、完整截断诊断与 B3 独立核验",
+  "approval": "负责人复审最终裁定，2026-11-14",
+  "benchmark_protocol_sha256": "f5fce67f7009a0c45cd3aad4f73792b694621e39f32ff5d743596fe6e9c5057e",
+  "old_engine": "engine2-ca65794eec8a",
+  "cap": 10,
+  "weight_fit_seed": 138,
+  "b2": {
+    "normal": {"tau": 0.025, "min_count": 39, "min_ess": 39},
+    "attack": {"tau": 0.05, "min_count": 19, "min_ess": 19},
+    "screen": "仅在检测完成且报漂移时尝试。两类分别检查实际校准条数、原权重有限且非负、截断后类总权重为正、Kish ESS、最大测试点 p 值下限 M/(W_y+M) 不超过原 tau。任一失败整批使用原非加权 Mondrian。",
+    "diagnostics": "报告每类 D_y+ = max_x[(sum(u_i-w_i)+u(x)-w(x))/(sum(u_i)+u(x))] 及 delta_res=tau-M/(W_y+M)，并报告 B2、批次截断行比例。它们只作诊断，原拒绝阈值不变。ESS 是权重集中度工程筛查，不构成覆盖率保证。"
+  },
+  "b3": {
+    "path": "使用实际 B2 判态路径在 B3 重算损失，权重诊断独立于 B2 筛查。沿用 T12 B3 划分、CRC 公式、α 档、加权攻击 ESS 和新异占比上限。分别保存数值结果、统计适用状态及 contract-7 展示状态。",
+    "scope": "B2 回退自身不判 B3 失效。B3 独立验证权重，缺可验证的目标比率与加权可交换性依据时，加权 CRC 仅作为诊断。漂移批次可按匹配判态的非加权 CRC 门限作尽力复核，禁止显示加权保证。未报漂移沿用原非加权条件性口径，记录交换性为假设。"
+  },
+  "validation": {
+    "sets": ["bot_holdout", "02-15", "02-21"],
+    "views": ["raw", "dedup"],
+    "variants": ["v6 weighted c10", "v2 fallback policy", "unweighted"],
+    "method": "同一原始批次及冻结底座，沿用分层、seed 42、原训练指纹及 g1 主预算。仅一次，只按登记设置比较覆盖率、预测集、四态、等预算放行错误、回退批次和 B2/B3 诊断。回退批次与非加权 p 值逐条相同，未回退与旧加权 p 值逐条相同。不以结果再选参数。",
+    "prior_knowledge": "已见原 T10/T12 日级结果及 ESS。本次筛查来自原检验水平的数值分辨率，截断不设接受门槛。"
+  }
+}

@@ -1,0 +1,18 @@
+# Checkout must be byte-identical to the repository on every platform.
+# The app, the launcher self-check and the benchmark verify files by SHA256
+# (artifacts/model.json -> six frozen sources, artifacts/engine.json, the three
+# release manifests, the protocol and rules files), so no line-ending conversion
+# is allowed, whatever core.autocrlf says.  The repository keeps each file's
+# original line endings (r13 shipped a mix of LF and CRLF); do not renormalise.
+* -text
+
+# Listed explicitly as well: a hash mismatch on these stops the app or the benchmark.
+liushao/__init__.py -text
+liushao/data.py -text
+liushao/feature_metadata.py -text
+liushao/model.py -text
+liushao/reference.py -text
+liushao/reviews.py -text
+artifacts/* -text
+artifacts/** -text
+configs/*.json -text
